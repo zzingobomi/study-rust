@@ -1,0 +1,37 @@
+# --- Rust / Cargo 빌드 산출물 ---
+target/
+debug/
+*.rs.bk
+*.pdb
+
+# --- 테스트 커버리지 / 프로파일링 ---
+*.profraw
+*.profdata
+coverage/
+tarpaulin-report.html
+perf.data*
+flamegraph.svg
+
+# --- 에디터 / IDE ---
+# .vscode/settings.json 같은 공유용 설정은 예외로 커밋
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+.idea/
+*.iml
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- 기타 ---
+.env
+.env.local
+*.log
+*.tmp
