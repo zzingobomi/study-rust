@@ -1,9 +1,11 @@
-use std::io::stdin;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    io::stdin,
+};
 
 fn main() {
-    // let mut memory: f64 = 0.0;
+    let mut memory = Memory::new();
     let mut prev_result: f64 = 0.0;
-    let mut memories: Vec<f64> = vec![0.0; 10];
 
     for line in stdin().lines() {
         let line = line.unwrap();
@@ -15,16 +17,16 @@ fn main() {
         // 메모리 기록
         let is_memory = tokens[0].starts_with("mem");
         if is_memory && tokens[0].ends_with('+') {
-            add_and_print_memory(&mut memories, tokens[0], prev_result);
+            memory.add_and_print(tokens[0], prev_result);
             continue;
         } else if is_memory && tokens[0].ends_with('-') {
-            add_and_print_memory(&mut memories, tokens[0], -prev_result);
+            memory.add_and_print(tokens[0], -prev_result);
             continue;
         }
 
         // 수식 계산
-        let left: f64 = eval_token(tokens[0], memories);
-        let right: f64 = eval_token(tokens[2], memories);
+        let left: f64 = memory.eval_token(tokens[0]);
+        let right: f64 = memory.eval_token(tokens[2]);
         let result = eval_expression(left, tokens[1], right);
 
         print_output(result);
@@ -36,18 +38,37 @@ fn print_output(value: f64) {
     println!("  => {}", value);
 }
 
-fn add_and_print_memory(memories: &mut Vec<f64>, token: &str, prev_result: f64) {
-    let slot_index: usize = token[3..token.len() - 1].parse().unwrap();
-    memories[slot_index] += prev_result;
-    print_output(memories[slot_index]);
+struct Memory {
+    slots: HashMap<String, f64>,
 }
+impl Memory {
+    fn new() -> Self {
+        Self {
+            slots: HashMap::new(),
+        }
+    }
 
-fn eval_token(token: &str, memories: Vec<f64>) -> f64 {
-    if token.starts_with("mem") {
-        let slot_index: usize = token[3..].parse().unwrap();
-        memories[slot_index]
-    } else {
-        token.parse().unwrap()
+    fn add_and_print(&mut self, token: &str, prev_result: f64) {
+        let slot_name = token[3..token.len() - 1].to_string();
+        match self.slots.entry(slot_name) {
+            Entry::Occupied(mut entry) => {
+                *entry.get_mut() += prev_result;
+                print_output(*entry.get());
+            }
+            Entry::Vacant(entry) => {
+                entry.insert(prev_result);
+                print_output(prev_result);
+            }
+        }
+    }
+
+    fn eval_token(&self, token: &str) -> f64 {
+        if token.starts_with("mem") {
+            let slot_name = &token[3..];
+            self.slots.get(slot_name).copied().unwrap_or(0.0)
+        } else {
+            token.parse().unwrap()
+        }
     }
 }
 
