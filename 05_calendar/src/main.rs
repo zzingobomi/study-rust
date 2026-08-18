@@ -40,28 +40,58 @@ enum Commands {
         start: NaiveDateTime,
         end: NaiveDateTime,
     },
+    Delete {
+        id: u64,
+    },
 }
 
 fn main() {
     let options = Cli::parse();
     match options.command {
-        Commands::List => show_list(),
+        Commands::List => {
+            let calendar = read_calendar();
+            show_list(&calendar);
+        }
         Commands::Add {
             subject,
             start,
             end,
-        } => add_schedule(subject, start, end),
+        } => {
+            let mut calendar = read_calendar();
+            if add_schedule(&mut calendar, subject, start, end) {
+                save_calendar(&calendar);
+                println!("일정을 추가했습니다.");
+            } else {
+                println!("오류: 일정이 중복됩니다.");
+            }
+        }
+        Commands::Delete { id } => {
+            let mut calendar = read_calendar();
+            if delete_schedule(&mut calendar, id) {
+                save_calendar(&calendar);
+                println!("일정을 삭제했습니다.");
+            } else {
+                println!("오류: 잘못된 ID입니다.");
+            }
+        }
     }
 }
 
-fn show_list() {
-    let calendar: Calendar = {
-        let file = File::open(SCHEDULE_FILE).unwrap();
-        let reader = BufReader::new(file);
-        serde_json::from_reader(reader).unwrap()
-    };
+fn read_calendar() -> Calendar {
+    let file = File::open(SCHEDULE_FILE).unwrap();
+    let reader = BufReader::new(file);
+    serde_json::from_reader(reader).unwrap()
+}
+
+fn save_calendar(calendar: &Calendar) {
+    let file = File::create(SCHEDULE_FILE).unwrap();
+    let writer = BufWriter::new(file);
+    serde_json::to_writer(writer, calendar).unwrap();
+}
+
+fn show_list(calendar: &Calendar) {
     println!("ID\tSTART\tEND\tSUBJECT");
-    for schedule in calendar.schedules {
+    for schedule in &calendar.schedules {
         println!(
             "{}\t{}\t{}\t{}",
             schedule.id, schedule.start, schedule.end, schedule.subject
@@ -69,12 +99,12 @@ fn show_list() {
     }
 }
 
-fn add_schedule(subject: String, start: NaiveDateTime, end: NaiveDateTime) {
-    let mut calendar: Calendar = {
-        let file = File::open(SCHEDULE_FILE).unwrap();
-        let reader = BufReader::new(file);
-        serde_json::from_reader(reader).unwrap()
-    };
+fn add_schedule(
+    calendar: &mut Calendar,
+    subject: String,
+    start: NaiveDateTime,
+    end: NaiveDateTime,
+) -> bool {
     let id = calendar.schedules.len() as u64;
     let new_schedule = Schedule {
         id,
@@ -84,17 +114,21 @@ fn add_schedule(subject: String, start: NaiveDateTime, end: NaiveDateTime) {
     };
     for schedule in &calendar.schedules {
         if schedule.intersects(&new_schedule) {
-            println!("오류: 일정이 중복됩니다.");
-            return;
+            return false;
         }
     }
     calendar.schedules.push(new_schedule);
-    {
-        let file = File::create(SCHEDULE_FILE).unwrap();
-        let writer = BufWriter::new(file);
-        serde_json::to_writer(writer, &calendar).unwrap();
+    true
+}
+
+fn delete_schedule(calendar: &mut Calendar, id: u64) -> bool {
+    for i in 0..calendar.schedules.len() {
+        if calendar.schedules[i].id == id {
+            calendar.schedules.remove(i);
+            return true;
+        }
     }
-    println!("일정을 추가했습니다.");
+    false
 }
 
 #[cfg(test)]
@@ -144,5 +178,97 @@ mod tests {
         };
 
         assert_eq!(should_intersect, schedule.intersects(&new_schedule));
+    }
+
+    #[test]
+    fn test_add_schedule() {
+        let mut calendar = Calendar {
+            schedules: vec![Schedule {
+                id: 0,
+                subject: "테스트 일정".to_string(),
+                start: naive_date_time(2024, 11, 19, 11, 22, 33),
+                end: naive_date_time(2024, 11, 19, 22, 33, 44),
+            }],
+        };
+        add_schedule(
+            &mut calendar,
+            "테스트 일정2".to_string(),
+            naive_date_time(2024, 12, 8, 9, 0, 0),
+            naive_date_time(2024, 12, 8, 10, 30, 0),
+        );
+        let expected = Calendar {
+            schedules: vec![
+                Schedule {
+                    id: 0,
+                    subject: "테스트 일정".to_string(),
+                    start: naive_date_time(2024, 11, 19, 11, 22, 33),
+                    end: naive_date_time(2024, 11, 19, 22, 33, 44),
+                },
+                Schedule {
+                    id: 1,
+                    subject: "테스트 일정2".to_string(),
+                    start: naive_date_time(2024, 12, 8, 9, 0, 0),
+                    end: naive_date_time(2024, 12, 8, 10, 30, 0),
+                },
+            ],
+        };
+        assert_eq!(expected, calendar);
+    }
+
+    #[test]
+    fn test_delete_schedule() {
+        let mut calendar = Calendar {
+            schedules: vec![
+                Schedule {
+                    id: 0,
+                    subject: "테스트 일정".to_string(),
+                    start: naive_date_time(2024, 11, 19, 11, 22, 33),
+                    end: naive_date_time(2024, 11, 19, 22, 33, 44),
+                },
+                Schedule {
+                    id: 1,
+                    subject: "테스트 일정2".to_string(),
+                    start: naive_date_time(2024, 12, 8, 9, 0, 0),
+                    end: naive_date_time(2024, 12, 8, 10, 30, 0),
+                },
+                Schedule {
+                    id: 2,
+                    subject: "추가 가능한 일정".to_string(),
+                    start: naive_date_time(2024, 12, 15, 10, 0, 0),
+                    end: naive_date_time(2024, 12, 15, 11, 00, 0),
+                },
+            ],
+        };
+        delete_schedule(&mut calendar, 0);
+        let expected = Calendar {
+            schedules: vec![
+                Schedule {
+                    id: 1,
+                    subject: "테스트 일정2".to_string(),
+                    start: naive_date_time(2024, 12, 8, 9, 0, 0),
+                    end: naive_date_time(2024, 12, 8, 10, 30, 0),
+                },
+                Schedule {
+                    id: 2,
+                    subject: "추가 가능한 일정".to_string(),
+                    start: naive_date_time(2024, 12, 15, 10, 0, 0),
+                    end: naive_date_time(2024, 12, 15, 11, 00, 0),
+                },
+            ],
+        };
+        assert_eq!(expected, calendar);
+        delete_schedule(&mut calendar, 1);
+        let expected = Calendar {
+            schedules: vec![Schedule {
+                id: 2,
+                subject: "추가 가능한 일정".to_string(),
+                start: naive_date_time(2024, 12, 15, 10, 0, 0),
+                end: naive_date_time(2024, 12, 15, 11, 00, 0),
+            }],
+        };
+        assert_eq!(expected, calendar);
+        assert!(delete_schedule(&mut calendar, 2));
+        let expected = Calendar { schedules: vec![] };
+        assert_eq!(expected, calendar);
     }
 }
