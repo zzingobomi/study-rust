@@ -48,45 +48,70 @@ enum Commands {
 fn main() {
     let options = Cli::parse();
     match options.command {
-        Commands::List => {
-            let calendar = read_calendar();
-            show_list(&calendar);
-        }
+        Commands::List => match read_calendar() {
+            Ok(calendar) => {
+                show_list(&calendar);
+            }
+            Err(_error) => {
+                println!("달력 읽기에 실패했습니다.");
+            }
+        },
         Commands::Add {
             subject,
             start,
             end,
-        } => {
-            let mut calendar = read_calendar();
-            if add_schedule(&mut calendar, subject, start, end) {
-                save_calendar(&calendar);
-                println!("일정을 추가했습니다.");
-            } else {
-                println!("오류: 일정이 중복됩니다.");
+        } => match read_calendar() {
+            Ok(mut calendar) => {
+                if add_schedule(&mut calendar, subject, start, end) {
+                    match save_calendar(&calendar) {
+                        Ok(()) => {
+                            println!("일정을 추가했습니다.");
+                        }
+                        Err(_error) => {
+                            println!("달력 저장에 실패했습니다.");
+                        }
+                    }
+                } else {
+                    println!("오류: 일정이 중복됩니다.");
+                }
             }
-        }
-        Commands::Delete { id } => {
-            let mut calendar = read_calendar();
-            if delete_schedule(&mut calendar, id) {
-                save_calendar(&calendar);
-                println!("일정을 삭제했습니다.");
-            } else {
-                println!("오류: 잘못된 ID입니다.");
+            Err(_error) => {
+                println!("달력 읽기에 실패했습니다.");
             }
-        }
+        },
+        Commands::Delete { id } => match read_calendar() {
+            Ok(mut calendar) => {
+                if delete_schedule(&mut calendar, id) {
+                    match save_calendar(&calendar) {
+                        Ok(()) => {
+                            println!("일정을 삭제했습니다.");
+                        }
+                        Err(_error) => {
+                            println!("달력 삭제에 실패했습니다.");
+                        }
+                    }
+                } else {
+                    println!("오류: 잘못된 ID입니다.");
+                }
+            }
+            Err(_error) => {
+                println!("달력 읽기에 실패했습니다.");
+            }
+        },
     }
 }
 
-fn read_calendar() -> Calendar {
-    let file = File::open(SCHEDULE_FILE).unwrap();
+fn read_calendar() -> Result<Calendar, MyError> {
+    let file = File::open(SCHEDULE_FILE)?;
     let reader = BufReader::new(file);
-    serde_json::from_reader(reader).unwrap()
+    Ok(serde_json::from_reader(reader)?)
 }
 
-fn save_calendar(calendar: &Calendar) {
-    let file = File::create(SCHEDULE_FILE).unwrap();
+fn save_calendar(calendar: &Calendar) -> Result<(), MyError> {
+    let file = File::create(SCHEDULE_FILE)?;
     let writer = BufWriter::new(file);
-    serde_json::to_writer(writer, calendar).unwrap();
+    serde_json::to_writer(writer, calendar)?;
+    Ok(())
 }
 
 fn show_list(calendar: &Calendar) {
@@ -129,6 +154,15 @@ fn delete_schedule(calendar: &mut Calendar, id: u64) -> bool {
         }
     }
     false
+}
+
+#[derive(thiserror::Error, Debug)]
+enum MyError {
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+
+    #[error("json error: {0}")]
+    Json(#[from] serde_json::Error),
 }
 
 #[cfg(test)]
