@@ -11,6 +11,7 @@
     "04_my_library/Cargo.toml",
     "04_01_another_bin/Cargo.toml",
     "05_calendar/Cargo.toml",
+    "06_toto/Cargo.toml"
   ],
   "rust-analyzer.checkOnSave": true,
   "rust-analyzer.check.command": "clippy",
